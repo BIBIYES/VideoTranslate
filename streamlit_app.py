@@ -6,6 +6,7 @@ Streamlit界面：提供“视频转字幕”“字幕烧录”“AI 字幕翻�
     streamlit run streamlit_app.py
 """
 import json
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 import re
 import tempfile
@@ -323,12 +324,27 @@ def main() -> None:
 
         st.markdown("#### 执行日志")
         burn_log_placeholder = st.empty()
+        if "burn_running" not in st.session_state:
+            st.session_state["burn_running"] = False
+        if st.session_state["burn_running"]:
+            st.info("字幕烧录进行中，请耐心等待。")
 
-        if st.button("开始烧录字幕", type="secondary", key="start_burn"):
+        burn_disabled = st.session_state["burn_running"]
+        start_burn = st.button(
+            "开始烧录字幕",
+            type="secondary",
+            key="start_burn",
+            disabled=burn_disabled,
+        )
+
+        if start_burn:
+            st.session_state["burn_running"] = True
             if burn_video is None or burn_srt is None:
                 st.warning("请同时上传视频和 SRT 字幕文件。")
+                st.session_state["burn_running"] = False
             else:
                 log = create_logger(burn_log_placeholder)
+                progress_bar = st.progress(0)
                 video_suffix = Path(burn_video.name).suffix or ".mp4"
                 with tempfile.NamedTemporaryFile(delete=False, suffix=video_suffix) as tmp_video:
                     tmp_video.write(burn_video.getbuffer())
@@ -346,16 +362,21 @@ def main() -> None:
                 )
 
                 try:
-                    log("1) 调用 ffmpeg 烧录字幕...")
-                    burn_subtitles(
-                        tmp_video_path,
-                        tmp_srt_path,
-                        tmp_output_path,
-                        force_style=force_style,
-                    )
-                    log("2) 烧录完成，准备提供下载。")
-                    burned_bytes = tmp_output_path.read_bytes()
+                    with st.spinner("正在烧录字幕，请稍候..."):
+                        log("1) 调用 ffmpeg 烧录字幕...")
+                        progress_bar.progress(20)
+                        burn_subtitles(
+                            tmp_video_path,
+                            tmp_srt_path,
+                            tmp_output_path,
+                            force_style=force_style,
+                        )
+                        progress_bar.progress(80)
+                        log("2) 烧录完成，准备提供下载。")
+                        burned_bytes = tmp_output_path.read_bytes()
+                        progress_bar.progress(100)
                 except Exception as exc:  # pragma: no cover - UI异常展示
+                    progress_bar.empty()
                     log(f"出错：{exc}")
                     st.error(f"烧录失败：{exc}")
                     return
@@ -363,6 +384,7 @@ def main() -> None:
                     tmp_video_path.unlink(missing_ok=True)
                     tmp_srt_path.unlink(missing_ok=True)
                     tmp_output_path.unlink(missing_ok=True)
+                    st.session_state["burn_running"] = False
 
                 video_stem = Path(burn_video.name).stem
                 output_name = f"{video_stem}_sub{video_suffix}"
@@ -409,11 +431,19 @@ def main() -> None:
         )
         chunk_size = st.slider(
             "每批翻译的字幕条数",
-            min_value=3,
-            max_value=20,
+            min_value=1,
+            max_value=10,
             value=6,
-            help="一次请求处理的字幕条数。数值越大速度越快但回答越长，建议 3-10。",
+            help="一次请求处理的字幕条数，1-10 条之间。条数越大速度越快，但单次回答越长。",
             key="translate_chunk_size",
+        )
+        concurrency = st.slider(
+            "并发请求数",
+            min_value=1,
+            max_value=3,
+            value=1,
+            help="同时发起的翻译请求数量，受限于 API 并发限制，建议 1-3。",
+            key="translate_concurrency",
         )
 
         translate_upload = st.file_uploader(
@@ -424,56 +454,107 @@ def main() -> None:
 
         st.markdown("#### 执行日志")
         translate_log_placeholder = st.empty()
+        if "translate_running" not in st.session_state:
+            st.session_state["translate_running"] = False
+        if st.session_state["translate_running"]:
+            st.info("字幕翻译进行中，正在批量调用 AI。请耐心等待。")
 
-        if st.button("开始翻译字幕", type="primary", key="start_translate"):
+        translate_disabled = st.session_state["translate_running"]
+        start_translate = st.button(
+            "开始翻译字幕",
+            type="primary",
+            key="start_translate",
+            disabled=translate_disabled,
+        )
+
+        if start_translate:
+            st.session_state["translate_running"] = True
             if translate_upload is None:
                 st.warning("请先上传 SRT 文件。")
+                st.session_state["translate_running"] = False
                 return
             if not api_base.strip() or not api_key.strip():
                 st.warning("请填写 API Base 与 API Key。")
+                st.session_state["translate_running"] = False
                 return
             log = create_logger(translate_log_placeholder)
             try:
                 srt_text = translate_upload.getvalue().decode("utf-8")
             except UnicodeDecodeError:
                 st.error("文件不是 UTF-8 编码，请转换后再试。")
+                st.session_state["translate_running"] = False
                 return
 
             segments = parse_srt_segments(srt_text)
             if not segments:
                 st.warning("未解析到任何字幕段，请确认 SRT 格式。")
+                st.session_state["translate_running"] = False
                 return
 
-            log(f"已解析 {len(segments)} 条字幕，开始分批翻译...")
-            client = OpenAI(api_key=api_key.strip(), base_url=api_base.strip())
+            try:
+                with st.spinner("AI 正在翻译字幕，请稍候..."):
+                    log(f"已解析 {len(segments)} 条字幕，开始分批翻译...")
+                    translated_map: Dict[int, str] = {}
+                    chunks = list(chunk_sequence(segments, chunk_size))
+                    total_batches = len(chunks)
 
-            translated_map: Dict[int, str] = {}
-            total_batches = (len(segments) + chunk_size - 1) // chunk_size
+                    if total_batches == 0:
+                        st.warning("没有需要翻译的字幕。")
+                        st.session_state["translate_running"] = False
+                        return
 
-            for batch_idx, chunk in enumerate(chunk_sequence(segments, chunk_size), start=1):
-                log(f"第 {batch_idx}/{total_batches} 批：调用模型翻译 {len(chunk)} 条字幕...")
-                try:
-                    chunk_result = translate_chunk_with_openai(
-                        client=client,
-                        model=model_name.strip(),
-                        target_language=target_lang,
-                        chunk=chunk,
-                    )
-                except Exception as exc:  # pragma: no cover - 网络异常展示
-                    log(f"出错：{exc}")
-                    st.error(f"翻译失败：{exc}")
-                    return
-                translated_map.update(chunk_result)
-                preview_lines = []
-                for seg in chunk:
-                    translated_text = chunk_result.get(seg["index"])
-                    if translated_text:
-                        original = " ".join(str(seg["text"]).splitlines())
-                        preview_lines.append(
-                            f'{seg["index"]}: "{original}" -> "{translated_text}"'
+                    api_base_clean = api_base.strip()
+                    api_key_clean = api_key.strip()
+                    model_clean = model_name.strip()
+
+                    def submit_chunk(chunk_data):
+                        client = OpenAI(api_key=api_key_clean, base_url=api_base_clean)
+                        return translate_chunk_with_openai(
+                            client=client,
+                            model=model_clean,
+                            target_language=target_lang,
+                            chunk=chunk_data,
                         )
-                if preview_lines:
-                    log("结果预览：\n" + "\n".join(preview_lines))
+
+                    log(
+                        f"共 {total_batches} 批字幕需要翻译，按 {chunk_size} 条/批，"
+                        f"并发请求数：{concurrency}。"
+                    )
+
+                    with ThreadPoolExecutor(max_workers=concurrency) as executor:
+                        future_map = {}
+                        for batch_idx, chunk in enumerate(chunks, start=1):
+                            log(
+                                f"第 {batch_idx}/{total_batches} 批：提交 {len(chunk)} 条字幕翻译请求..."
+                            )
+                            future = executor.submit(submit_chunk, chunk)
+                            future_map[future] = (batch_idx, chunk)
+
+                        for future in as_completed(future_map):
+                            batch_idx, chunk = future_map[future]
+                            try:
+                                chunk_result = future.result()
+                            except Exception as exc:  # pragma: no cover - 网络异常展示
+                                log(f"第 {batch_idx} 批出错：{exc}")
+                                st.error(f"翻译失败：{exc}")
+                                st.session_state["translate_running"] = False
+                                return
+                            translated_map.update(chunk_result)
+                            preview_lines = []
+                            for seg in chunk:
+                                translated_text = chunk_result.get(seg["index"])
+                                if translated_text:
+                                    original = " ".join(str(seg["text"]).splitlines())
+                                    preview_lines.append(
+                                        f'{seg["index"]}: "{original}" -> "{translated_text}"'
+                                    )
+                            if preview_lines:
+                                log(
+                                    f"第 {batch_idx}/{total_batches} 批结果：\n"
+                                    + "\n".join(preview_lines)
+                                )
+            finally:
+                st.session_state["translate_running"] = False
 
             translated_segments = [
                 (
