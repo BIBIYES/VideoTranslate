@@ -63,37 +63,7 @@
    - `模型名称` 可填写 `gpt-4o-mini`、`gpt-4o-mini-translation` 等。
    - `每批翻译的字幕条数` 建议 3-10，避免超长输出。
 
-## 4. 打包为单文件可执行（macOS 示例）
-
-1. 安装 PyInstaller：
-   ```bash
-   pip install pyinstaller
-   ```
-2. 打包 CLI：
-   ```bash
-   pyinstaller --onefile --name video_subtitle mian.py
-   ```
-   - 生成的可执行文件位于 `dist/video_subtitle`，复制到目标机器后执行：
-     ```bash
-     chmod +x video_subtitle
-     ./video_subtitle /path/to/video.mp4
-     ```
-   - 如果想要一个“双击即启动终端”的脚本，可创建 `run_cli.command`，内容：
-     ```bash
-     #!/bin/bash
-     DIR="$(cd "$(dirname "$0")" && pwd)"
-     "$DIR/video_subtitle" "$@"
-     ```
-     然后 `chmod +x run_cli.command`。
-3. 如果希望命令启动 Streamlit，可编写一个 `run_streamlit.py`：
-   ```python
-   import subprocess, sys, pathlib
-   ROOT = pathlib.Path(__file__).resolve().parent
-   subprocess.run([sys.executable, "-m", "streamlit", "run", str(ROOT / "streamlit_app.py")], check=True)
-   ```
-   然后 `pyinstaller --onefile --name video_subtitle_web run_streamlit.py`。
-
-## 5. 常见问题
+## 4. 常见问题
 
 1. **模型下载太慢/无进度**：日志会提示“加载 / 下载模型”，但没有详细百分比。可提前使用 Hugging Face CLI 下载模型并通过 `--model-size` 指向本地目录。
 2. **`ffmpeg failed to extract audio`**：输入视频可能没有音频流。可先用 `ffprobe your_video.mp4` 检查是否存在 `Stream #0:1: Audio`；若无须重新生成带音轨的视频。
@@ -101,7 +71,7 @@
 4. **代理环境提示缺少 socksio**：安装 `pip install "httpx[socks]"`，确保 httpx 支持 SOCKS 代理。
 5. **未安装 ffmpeg**：在 macOS 上执行 `brew install ffmpeg`（或对应平台的安装方式）。
 
-## 6. 目录结构（关键文件）
+## 5. 目录结构（关键文件）
 
 ```
 .
