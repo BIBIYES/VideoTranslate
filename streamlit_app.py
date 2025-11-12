@@ -98,16 +98,18 @@ def translate_chunk_with_openai(
     chunk: Sequence[Dict[str, object]],
 ) -> Dict[int, str]:
     system_prompt = (
-        "你是一名专业字幕翻译。"
-        f"请将输入的字幕内容翻译成{target_language}，保持原意和语气，不要丢失数字或专有名词。"
-        "只返回 JSON 数组，每个元素包含 index (数字) 和 translation (字符串)。"
+        "你是一名专业影视字幕译者，翻译时要考虑前后语境并自动修正由于语音识别造成的小错误。"
+        f"请将输入的字幕内容翻译成{target_language}，保持角色语气与情感，不要丢失数字、专有名词或时间信息。"
+        "如果原文存在错别字或缺词，请结合上下文补全后再翻译。"
+        "输出必须是 JSON 数组，每个元素包含 index (数字) 和 translation (字符串)。"
     )
     formatted_lines = []
     for seg in chunk:
         text = " ".join(str(seg["text"]).split())
         formatted_lines.append(f"{seg['index']}|{text}")
     user_prompt = (
-        "以下是需要翻译的字幕行，格式为 index|文本 ：\n"
+        "以下是按时间顺序排列的字幕行，格式为 index|文本。"
+        "翻译时需要结合同一批次内前后语境，让语句自然通顺，也可微调识别错误：\n"
         + "\n".join(formatted_lines)
         + "\n请翻译为目标语言，只返回 JSON 数组。"
     )
@@ -214,11 +216,28 @@ def main() -> None:
             )
 
         st.markdown("#### 执行日志")
+        st.caption(
+            "提示：无法显示精确进度条，可在系统监控工具中查看 GPU / CPU 占用（macOS 活动监视器 / Windows 任务管理器）判断是否仍在运行。"
+        )
         transcribe_log_placeholder = st.empty()
+        if "transcribe_running" not in st.session_state:
+            st.session_state["transcribe_running"] = False
+        if st.session_state["transcribe_running"]:
+            st.info("字幕生成任务正在运行，请耐心等待（首次运行需要下载模型会较慢）。")
 
-        if st.button("开始生成字幕", type="primary", key="start_transcribe"):
+        button_disabled = st.session_state["transcribe_running"]
+        start_transcribe = st.button(
+            "开始生成字幕",
+            type="primary",
+            key="start_transcribe",
+            disabled=button_disabled,
+        )
+
+        if start_transcribe:
+            st.session_state["transcribe_running"] = True
             if upload is None:
                 st.warning("请先上传文件。")
+                st.session_state["transcribe_running"] = False
             else:
                 log = create_logger(transcribe_log_placeholder)
                 suffix = Path(upload.name).suffix or ".mp4"
@@ -229,20 +248,22 @@ def main() -> None:
                     tmp_audio_path = Path(tmp_audio.name)
 
                 try:
-                    log("1) 提取音频中...")
-                    extract_audio(tmp_video_path, tmp_audio_path)
-                    log("2) 开始语音识别...")
-                    segments = list(
-                        transcribe_audio(
-                            tmp_audio_path,
-                            model_size,
-                            language,
-                            device,
-                            compute_type,
-                            vad_filter,
+                    with st.spinner("正在生成字幕，请稍等（首次下载模型可能较久）..."):
+                        log("1) 提取音频中...")
+                        extract_audio(tmp_video_path, tmp_audio_path)
+                        log("2) 加载 / 下载 faster-whisper 模型，首次使用可能需等待...")
+                        log("3) 开始语音识别...")
+                        segments = list(
+                            transcribe_audio(
+                                tmp_audio_path,
+                                model_size,
+                                language,
+                                device,
+                                compute_type,
+                                vad_filter,
+                            )
                         )
-                    )
-                    log(f"完成！共输出 {len(segments)} 条字幕。")
+                        log(f"完成！共输出 {len(segments)} 条字幕。")
                 except Exception as exc:  # pragma: no cover - UI异常展示
                     log(f"出错：{exc}")
                     st.error(f"生成失败：{exc}")
@@ -250,6 +271,7 @@ def main() -> None:
                 finally:
                     tmp_video_path.unlink(missing_ok=True)
                     tmp_audio_path.unlink(missing_ok=True)
+                    st.session_state["transcribe_running"] = False
 
                 srt_text = build_srt_content(segments)
                 default_name = Path(upload.name).with_suffix(".srt").name
