@@ -65,7 +65,7 @@
 
 ## 4. 常见问题
 
-1. **模型下载太慢/无进度**：日志会提示“加载 / 下载模型”，但没有详细百分比。可提前使用 Hugging Face CLI 下载模型并通过 `--model-size` 指向本地目录。
+1. **模型下载太慢/无进度**：日志会提示“加载 / 下载模型”，但没有详细百分比。可提前使用 Hugging Face CLI 下载模型，并在 CLI 的 `--model-size` 或 Web 界面“自定义模型/本地路径”中填入本地目录以避免重复下载。
 2. **`ffmpeg failed to extract audio`**：输入视频可能没有音频流。可先用 `ffprobe your_video.mp4` 检查是否存在 `Stream #0:1: Audio`；若无须重新生成带音轨的视频。
 3. **`Requested int8_float16 compute type...`**：当前设备不支持 `int8_float16`。改用 `--compute-type float32` 或 `int8`。
 4. **代理环境提示缺少 socksio**：安装 `pip install "httpx[socks]"`，确保 httpx 支持 SOCKS 代理。
