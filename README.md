@@ -75,16 +75,6 @@
 - `模型名称` 可填写 `gpt-4o-mini`、`gpt-4o-mini-translation` 等。
 - `每批翻译的字幕条数` 以及“并发请求数”都可在页面中调节，方便在速度与稳定性之间平衡。
 
-### 界面示意图
-
-下图展示 Streamlit 三个 Tab 的核心交互区域，可以直接在 GitHub 或 Streamlit 的 Markdown 预览里显示。
-
-![视频转字幕 Tab](assets/VideoToSrt.png)
-
-![字幕烧录 Tab](assets/SubtitleBurning.png)
-
-![AI 字幕翻译 Tab](assets/AI-SubtitleTranslation.png)
-
 ## 4. 常见问题
 
 1. **模型下载太慢/无进度**：日志会提示“加载 / 下载模型”，但没有详细百分比。可提前使用 Hugging Face CLI 下载模型，并在 CLI 的 `--model-size` 或 Web 界面“自定义模型/本地路径”中填入本地目录以避免重复下载。
