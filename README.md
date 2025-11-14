@@ -1,6 +1,18 @@
 # 视频字幕工具箱使用指南
 
+📘 [English guide](README.en.md)
+
 本项目提供基于 faster-whisper 的 **视频转字幕**、基于 ffmpeg 的 **字幕烧录**，以及基于 OpenAI 模型的 **AI 字幕翻译**。既可以在命令行中运行，也可以通过 Streamlit Web 页面操作。
+
+## Streamlit 界面一览
+
+下图展示 Streamlit 应用三个 Tab 的典型 UI，可直接在 GitHub 或任何支持 Markdown 的平台上预览。
+
+![视频转字幕 Tab](assets/VideoToSrt.png)
+
+![字幕烧录 Tab](assets/SubtitleBurning.png)
+
+![AI 字幕翻译 Tab](assets/AI-SubtitleTranslation.png)
 
 ## 1. 环境准备
 
@@ -59,9 +71,19 @@
 
 3. AI 翻译说明：
    - 需要兼容 OpenAI 格式的接口，例如官方 API 或第三方代理。
-   - `API Base` 形如 `https://api.openai.com/v1`，`API Key` 只在本次会话中使用。
-   - `模型名称` 可填写 `gpt-4o-mini`、`gpt-4o-mini-translation` 等。
-   - `每批翻译的字幕条数` 以及“并发请求数”都可在页面中调节，方便在速度与稳定性之间平衡。
+- `API Base` 形如 `https://api.openai.com/v1`，`API Key` 只在本次会话中使用。
+- `模型名称` 可填写 `gpt-4o-mini`、`gpt-4o-mini-translation` 等。
+- `每批翻译的字幕条数` 以及“并发请求数”都可在页面中调节，方便在速度与稳定性之间平衡。
+
+### 界面示意图
+
+下图展示 Streamlit 三个 Tab 的核心交互区域，可以直接在 GitHub 或 Streamlit 的 Markdown 预览里显示。
+
+![视频转字幕 Tab](assets/VideoToSrt.png)
+
+![字幕烧录 Tab](assets/SubtitleBurning.png)
+
+![AI 字幕翻译 Tab](assets/AI-SubtitleTranslation.png)
 
 ## 4. 常见问题
 
@@ -82,14 +104,8 @@
 └── venv/                # 虚拟环境（可选）
 ```
 
-## 6. 资源与截图
-
-本项目把示例界面截图统一放在 `assets/` 目录，便于在文档或演示中复用：
-
-- `assets/VideoToSrt.png`：展示视频转字幕 Tab 的上传与模型选择区域；
-- `assets/SubtitleBurning.png`：展示字幕烧录 Tab 中的 ffmpeg 控制项与进度条；
-- `assets/AI-SubtitleTranslation.png`：展示 AI 字幕翻译 Tab 的 API 配置与批量翻译控制。
-
-在更新 Streamlit 页面或撰写使用手册时，可直接引用这些图片，保持示例与当前界面一致。
-
 如有更多需求（例如批量处理、字幕样式模板、自定义 AI 提示词等），可以基于现有代码继续扩展。欢迎反馈使用体验！
+
+## 许可证
+
+本项目采用 [GNU GPLv3](./LICENSE) 开源协议，欢迎在遵守协议的前提下自由使用、复制与修改代码。
