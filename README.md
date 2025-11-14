@@ -82,4 +82,14 @@
 └── venv/                # 虚拟环境（可选）
 ```
 
+## 6. 资源与截图
+
+本项目把示例界面截图统一放在 `assets/` 目录，便于在文档或演示中复用：
+
+- `assets/VideoToSrt.png`：展示视频转字幕 Tab 的上传与模型选择区域；
+- `assets/SubtitleBurning.png`：展示字幕烧录 Tab 中的 ffmpeg 控制项与进度条；
+- `assets/AI-SubtitleTranslation.png`：展示 AI 字幕翻译 Tab 的 API 配置与批量翻译控制。
+
+在更新 Streamlit 页面或撰写使用手册时，可直接引用这些图片，保持示例与当前界面一致。
+
 如有更多需求（例如批量处理、字幕样式模板、自定义 AI 提示词等），可以基于现有代码继续扩展。欢迎反馈使用体验！
